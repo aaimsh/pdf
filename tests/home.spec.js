@@ -1,11 +1,11 @@
 import { test, expect } from '@playwright/test';
 
-const TOOLS = ['merge', 'split', 'organize', 'images', 'topng', 'resize'];
+const TOOLS = ['merge', 'split', 'organize', 'images', 'topng', 'resize', 'compress'];
 
 test.describe('Home & navigation', () => {
-  test('renders six tool cards', async ({ page }) => {
+  test('renders all tool cards', async ({ page }) => {
     await page.goto('/');
-    await expect(page.locator('.tool-card')).toHaveCount(6);
+    await expect(page.locator('.tool-card')).toHaveCount(TOOLS.length);
   });
 
   test('defaults to Arabic + RTL', async ({ page }) => {

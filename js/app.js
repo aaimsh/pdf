@@ -6,7 +6,7 @@ import {
 } from './ui.js';
 import {
   mergePdfs, extractPages, splitRanges, splitEachPage, rebuildPages,
-  imagesToPdf, pdfToImages, resizePages, pageCount, openWithPdfjs, renderThumb,
+  imagesToPdf, pdfToImages, resizePages, compressPdf, pageCount, openWithPdfjs, renderThumb,
   PAGE_SIZES,
 } from './pdf-utils.js';
 import { zipSync } from './lib.js';
@@ -23,6 +23,7 @@ const TOOLS = [
   { id: 'images',   icon: '🖼️' },
   { id: 'topng',    icon: '📸' },
   { id: 'resize',   icon: '📐' },
+  { id: 'compress', icon: '🗜️' },
 ];
 
 const view = () => document.getElementById('view');
@@ -498,6 +499,60 @@ function renderResize() {
   );
 }
 
+/* --------------------------- Compress --------------------------- */
+function renderCompress() {
+  clear();
+  let file = null;
+  const info = el('div', { class: 'empty', id: 'cmp-info' }, t('common.noPdf'));
+  const resultBox = el('div', { id: 'cmp-result' });
+
+  const levelRow = el('div', { class: 'radio-row' }, [
+    el('label', {}, [el('input', { type: 'radio', name: 'clevel', value: 'low' }), t('compress.level.low')]),
+    el('label', {}, [el('input', { type: 'radio', name: 'clevel', value: 'medium', checked: true }), t('compress.level.medium')]),
+    el('label', {}, [el('input', { type: 'radio', name: 'clevel', value: 'high' }), t('compress.level.high')]),
+  ]);
+
+  const dz = dropzone({
+    accept: PDF_ACCEPT, multiple: false, icon: '🗜️',
+    label: t('common.dropPdf'),
+    onFiles: async ([f]) => {
+      file = f;
+      const c = await withBusy(t('split.reading'), () => pageCount(f));
+      info.className = 'hint';
+      info.textContent = t('common.fileInfo', { name: f.name, n: c });
+      resultBox.replaceChildren();
+    },
+  });
+
+  const go = el('button', { class: 'btn btn-primary', onClick: async () => {
+    if (!file) return toast(t('common.loadFirst'), 'err');
+    const level = levelRow.querySelector('input:checked').value;
+    const before = file.size;
+    const bytes = await withBusy(t('compress.busy'), () => compressPdf(file, { level }));
+    if (!bytes) return;
+    const after = bytes.length;
+    const pct = Math.round((1 - after / before) * 100);
+    downloadBlob(bytes, 'compressed.pdf');
+    resultBox.replaceChildren(el('div', { class: 'result' }, [
+      el('span', { class: 'ok-ico' }, pct > 0 ? '✓' : 'ℹ️'),
+      el('span', {}, t('compress.result', { before: fmtBytes(before), after: fmtBytes(after), pct })),
+    ]));
+    toast(pct > 0 ? t('compress.done') : t('compress.larger'), pct > 0 ? 'ok' : 'info', pct > 0 ? 4000 : 6000);
+  } }, t('compress.action'));
+
+  view().append(
+    pageHead('tool.compress.title', 'compress.subtitle'),
+    el('div', { class: 'card' }, [dz, info]),
+    el('div', { class: 'card' }, [
+      el('h2', {}, t('compress.levelHeading')),
+      levelRow,
+      el('div', { class: 'hint', style: 'margin-top:12px' }, t('compress.note')),
+    ]),
+    el('div', { class: 'btn-row' }, [go]),
+    resultBox,
+  );
+}
+
 /* ----------------------------- Router --------------------------- */
 const ROUTES = {
   '': renderHome,
@@ -507,6 +562,7 @@ const ROUTES = {
   'images': renderImages,
   'topng': renderToPng,
   'resize': renderResize,
+  'compress': renderCompress,
 };
 
 function route() {

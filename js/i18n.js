@@ -30,6 +30,8 @@ const STR = {
     'tool.topng.blurb': 'حوّل كل صفحة إلى صورة PNG أو JPG.',
     'tool.resize.title': 'تغيير حجم الصفحات',
     'tool.resize.blurb': 'غيّر حجم الصفحات أو لائمها مع A4 أو Letter أو Legal…',
+    'tool.compress.title': 'ضغط PDF',
+    'tool.compress.blurb': 'قلّل حجم الملف بإعادة ضغط الصفحات.',
 
     'common.dropPdf': 'أفلت ملف PDF هنا أو انقر للاختيار',
     'common.dropPdfs': 'أفلت ملفات PDF هنا أو انقر للاختيار',
@@ -125,6 +127,18 @@ const STR = {
     'resize.busy': 'جارٍ تغيير الحجم…',
     'resize.done': 'تم تنزيل ملف PDF بعد تغيير الحجم.',
 
+    'compress.subtitle': 'قلّل حجم الملف بإعادة ترميز الصفحات كصور. مناسب للملفات الممسوحة ضوئيًا أو الغنية بالصور.',
+    'compress.levelHeading': 'مستوى الضغط',
+    'compress.level.low': 'خفيف (جودة أعلى)',
+    'compress.level.medium': 'متوازن',
+    'compress.level.high': 'أقصى (أصغر حجمًا)',
+    'compress.note': 'ملاحظة: تتحول الصفحات إلى صور، لذا يُفقد تحديد النص.',
+    'compress.action': 'ضغط وتنزيل',
+    'compress.busy': 'جارٍ الضغط…',
+    'compress.result': 'الحجم: {before} ← {after} (توفير {pct}%)',
+    'compress.done': 'تم تنزيل ملف PDF المضغوط.',
+    'compress.larger': 'لم يصغر الملف — قد يكون مضغوطًا بالفعل أو نصيًا بالكامل. جرّب مستوى ضغط أعلى.',
+
     'err.generic': 'حدث خطأ ما.',
   },
 
@@ -153,6 +167,8 @@ const STR = {
     'tool.topng.blurb': 'Render every page to a PNG or JPG image.',
     'tool.resize.title': 'Resize Pages',
     'tool.resize.blurb': 'Scale pages or fit them to A4, Letter, Legal…',
+    'tool.compress.title': 'Compress PDF',
+    'tool.compress.blurb': 'Shrink file size by re-compressing the pages.',
 
     'common.dropPdf': 'Drop a PDF here or click to browse',
     'common.dropPdfs': 'Drop PDFs here or click to browse',
@@ -247,6 +263,18 @@ const STR = {
     'resize.action': 'Resize & download',
     'resize.busy': 'Resizing…',
     'resize.done': 'Resized PDF downloaded.',
+
+    'compress.subtitle': 'Shrink file size by re-encoding pages as images. Best for scanned or image-heavy PDFs.',
+    'compress.levelHeading': 'Compression level',
+    'compress.level.low': 'Light (higher quality)',
+    'compress.level.medium': 'Balanced',
+    'compress.level.high': 'Maximum (smallest)',
+    'compress.note': 'Note: pages become images, so selectable text is lost.',
+    'compress.action': 'Compress & download',
+    'compress.busy': 'Compressing…',
+    'compress.result': 'Size: {before} → {after} ({pct}% saved)',
+    'compress.done': 'Compressed PDF downloaded.',
+    'compress.larger': 'File didn’t get smaller — it may already be optimized or text-only. Try a higher level.',
 
     'err.generic': 'Something went wrong.',
   },

@@ -10,7 +10,7 @@ test.describe('@mobile', () => {
 
   test('home has no horizontal overflow', async ({ page }) => {
     await page.goto('/');
-    await expect(page.locator('.tool-card')).toHaveCount(6);
+    await expect(page.locator('.tool-card')).toHaveCount(7);
     expect(await noHorizontalOverflow(page)).toBe(true);
   });
 
