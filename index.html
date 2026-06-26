@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PDF Toolkit — private, in-browser PDF tools</title>
+  <meta name="description" content="Merge, split, organize, resize PDFs and convert images to PDF — all in your browser. Your files never leave your device." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📄</text></svg>" />
+  <link rel="stylesheet" href="./css/styles.css" />
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="#/">
+      <span class="brand-mark">📄</span>
+      <span class="brand-name">PDF&nbsp;Toolkit</span>
+    </a>
+    <span class="brand-tag">100% in your browser · nothing uploaded</span>
+  </header>
+
+  <main id="view" class="view" aria-live="polite"><!-- rendered by app.js --></main>
+
+  <footer class="site-footer">
+    <span>Runs entirely client-side with <a href="https://pdf-lib.js.org" target="_blank" rel="noopener">pdf-lib</a> &amp; <a href="https://mozilla.github.io/pdf.js/" target="_blank" rel="noopener">pdf.js</a>.</span>
+    <span>Your files stay on your device.</span>
+  </footer>
+
+  <div id="toast-host" class="toast-host" aria-live="assertive"></div>
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
