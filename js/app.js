@@ -2,36 +2,39 @@
 
 import {
   el, toast, withBusy, downloadBlob, dropzone, parsePageRanges,
-  makeSortable, fmtBytes,
+  makeSortable, moveButtons, moveItem, fmtBytes,
 } from './ui.js';
 import {
   mergePdfs, extractPages, splitRanges, splitEachPage, rebuildPages,
-  imagesToPdf, pdfToImages, resizePages, pageCount, openWithPdfjs, renderThumb,
+  imagesToPdf, pdfToImages, resizePages, compressPdf, pageCount, openWithPdfjs, renderThumb,
   PAGE_SIZES,
 } from './pdf-utils.js';
 import { zipSync } from './lib.js';
+import { t, setLang, otherLang, applyDocumentChrome } from './i18n.js';
 
 const PDF_ACCEPT = 'application/pdf,.pdf';
 const IMG_ACCEPT = 'image/png,image/jpeg,.png,.jpg,.jpeg';
 
+// Tool registry — titles/blurbs are resolved through i18n at render time.
 const TOOLS = [
-  { id: 'merge',    icon: '🧩', title: 'Merge PDFs',     blurb: 'Combine several PDFs into one. Drag to reorder.' },
-  { id: 'split',    icon: '✂️', title: 'Split & Extract', blurb: 'Pull out page ranges or split into separate files.' },
-  { id: 'organize', icon: '🗂️', title: 'Organize Pages',  blurb: 'Delete, reorder and rotate individual pages.' },
-  { id: 'images',   icon: '🖼️', title: 'Images → PDF',    blurb: 'Turn JPG/PNG images into a PDF document.' },
-  { id: 'topng',    icon: '📸', title: 'PDF → Images',    blurb: 'Render every page to a PNG or JPG image.' },
-  { id: 'resize',   icon: '📐', title: 'Resize Pages',    blurb: 'Scale pages or fit them to A4, Letter, Legal…' },
+  { id: 'merge',    icon: '🧩' },
+  { id: 'split',    icon: '✂️' },
+  { id: 'organize', icon: '🗂️' },
+  { id: 'images',   icon: '🖼️' },
+  { id: 'topng',    icon: '📸' },
+  { id: 'resize',   icon: '📐' },
+  { id: 'compress', icon: '🗜️' },
 ];
 
 const view = () => document.getElementById('view');
 
 function clear() { view().replaceChildren(); }
 
-function pageHead(title, subtitle) {
+function pageHead(titleKey, subtitleKey) {
   return el('div', { class: 'page-head' }, [
-    el('a', { class: 'back-link', href: '#/' }, ['← All tools']),
-    el('h1', {}, title),
-    subtitle ? el('p', {}, subtitle) : null,
+    el('a', { class: 'back-link', href: '#/' }, [el('span', { class: 'arrow' }, '←'), ' ', t('nav.back')]),
+    el('h1', {}, t(titleKey)),
+    subtitleKey ? el('p', {}, t(subtitleKey)) : null,
   ]);
 }
 
@@ -55,14 +58,14 @@ function renderHome() {
   clear();
   view().append(
     el('section', { class: 'hero' }, [
-      el('h1', {}, 'Your private PDF toolkit'),
-      el('p', {}, 'Merge, split, organize, resize and convert PDFs right in your browser. Files are processed on your device and never uploaded.'),
+      el('h1', {}, t('home.title')),
+      el('p', {}, t('home.subtitle')),
     ]),
     el('div', { class: 'tool-grid' },
-      TOOLS.map((t) => el('a', { class: 'tool-card', href: `#/${t.id}` }, [
-        el('span', { class: 'ico' }, t.icon),
-        el('h3', {}, t.title),
-        el('p', {}, t.blurb),
+      TOOLS.map((tool) => el('a', { class: 'tool-card', href: `#/${tool.id}` }, [
+        el('span', { class: 'ico' }, tool.icon),
+        el('h3', {}, t(`tool.${tool.id}.title`)),
+        el('p', {}, t(`tool.${tool.id}.blurb`)),
       ])),
     ),
   );
@@ -72,7 +75,10 @@ function renderHome() {
 function renderMerge() {
   clear();
   let files = [];
-  const listCard = el('div', { class: 'card' }, [el('h2', {}, 'Files to merge'), el('div', { class: 'empty', id: 'merge-empty' }, 'No files yet — add at least two PDFs.')]);
+  const listCard = el('div', { class: 'card' }, [
+    el('h2', {}, t('merge.filesHeading')),
+    el('div', { class: 'empty', id: 'merge-empty' }, t('merge.empty')),
+  ]);
   const list = el('ul', { class: 'file-list', id: 'merge-list' });
   listCard.append(list);
 
@@ -81,10 +87,15 @@ function renderMerge() {
     document.getElementById('merge-empty').style.display = files.length ? 'none' : '';
     files.forEach((f, i) => {
       list.append(el('li', { class: 'file-item', draggable: 'true', dataset: { i } }, [
-        el('span', { class: 'grip', title: 'Drag to reorder' }, '⠿'),
+        el('span', { class: 'grip', title: t('reorder.grip') }, '⠿'),
         el('span', { class: 'fname' }, f.name),
         el('span', { class: 'fmeta' }, fmtBytes(f.size)),
-        el('button', { class: 'btn btn-danger', title: 'Remove', onClick: () => { files.splice(i, 1); refresh(); } }, '✕'),
+        ...moveButtons({
+          upLabel: t('move.up'), downLabel: t('move.down'),
+          onUp: () => { moveItem(files, i, -1); refresh(); },
+          onDown: () => { moveItem(files, i, 1); refresh(); },
+        }),
+        el('button', { class: 'btn btn-danger', title: t('item.remove'), 'aria-label': t('item.remove'), onClick: () => { files.splice(i, 1); refresh(); } }, '✕'),
       ]));
     });
   };
@@ -97,19 +108,18 @@ function renderMerge() {
 
   const dz = dropzone({
     accept: PDF_ACCEPT, multiple: true, icon: '🧩',
-    label: 'Drop PDFs here or click to browse',
-    hint: 'Add two or more PDF files',
+    label: t('common.dropPdfs'), hint: t('merge.hint'),
     onFiles: (picked) => { files.push(...picked.filter((f) => /pdf$/i.test(f.type) || /\.pdf$/i.test(f.name))); refresh(); },
   });
 
   const go = el('button', { class: 'btn btn-primary', onClick: async () => {
-    if (files.length < 2) return toast('Add at least two PDFs to merge.', 'err');
-    const bytes = await withBusy('Merging…', () => mergePdfs(files));
-    if (bytes) { downloadBlob(bytes, 'merged.pdf'); toast('Merged PDF downloaded.', 'ok'); }
-  } }, 'Merge & download');
+    if (files.length < 2) return toast(t('merge.needTwo'), 'err');
+    const bytes = await withBusy(t('merge.busy'), () => mergePdfs(files));
+    if (bytes) { downloadBlob(bytes, 'merged.pdf'); toast(t('merge.done'), 'ok'); }
+  } }, t('merge.action'));
 
   view().append(
-    pageHead('Merge PDFs', 'Combine multiple PDFs into a single document.'),
+    pageHead('tool.merge.title', 'merge.subtitle'),
     el('div', { class: 'card' }, [dz]),
     listCard,
     el('div', { class: 'btn-row' }, [go]),
@@ -123,32 +133,32 @@ function renderSplit() {
   let file = null;
   let count = 0;
 
-  const info = el('div', { class: 'empty', id: 'split-info' }, 'No PDF loaded yet.');
-  const rangeInput = el('input', { type: 'text', placeholder: 'e.g. 1-3, 5, 8-10', id: 'split-range' });
+  const info = el('div', { class: 'empty', id: 'split-info' }, t('common.noPdf'));
+  const rangeInput = el('input', { type: 'text', placeholder: t('split.placeholder'), id: 'split-range' });
 
   const modeRow = el('div', { class: 'radio-row' }, [
-    el('label', {}, [el('input', { type: 'radio', name: 'smode', value: 'extract', checked: true }), 'Extract to one PDF']),
-    el('label', {}, [el('input', { type: 'radio', name: 'smode', value: 'split' }), 'Split each range to its own PDF']),
-    el('label', {}, [el('input', { type: 'radio', name: 'smode', value: 'each' }), 'Split every page']),
+    el('label', {}, [el('input', { type: 'radio', name: 'smode', value: 'extract', checked: true }), t('split.mode.extract')]),
+    el('label', {}, [el('input', { type: 'radio', name: 'smode', value: 'split' }), t('split.mode.split')]),
+    el('label', {}, [el('input', { type: 'radio', name: 'smode', value: 'each' }), t('split.mode.each')]),
   ]);
 
   const dz = dropzone({
     accept: PDF_ACCEPT, multiple: false, icon: '✂️',
-    label: 'Drop a PDF here or click to browse',
+    label: t('common.dropPdf'),
     onFiles: async ([f]) => {
       file = f;
-      count = await withBusy('Reading…', () => pageCount(f));
+      count = await withBusy(t('split.reading'), () => pageCount(f));
       info.className = 'hint';
-      info.textContent = `${f.name} — ${count} page${count === 1 ? '' : 's'}.`;
+      info.textContent = t('common.fileInfo', { name: f.name, n: count });
     },
   });
 
   const go = el('button', { class: 'btn btn-primary', onClick: async () => {
-    if (!file) return toast('Load a PDF first.', 'err');
+    if (!file) return toast(t('common.loadFirst'), 'err');
     const mode = modeRow.querySelector('input:checked').value;
     if (mode === 'each') {
-      const parts = await withBusy('Splitting…', () => splitEachPage(file, file.name.replace(/\.pdf$/i, '')));
-      if (parts) { await zipDownload(parts, 'pages.zip'); toast(`Split into ${parts.length} files.`, 'ok'); }
+      const parts = await withBusy(t('split.busy'), () => splitEachPage(file, file.name.replace(/\.pdf$/i, '')));
+      if (parts) { await zipDownload(parts, 'pages.zip'); toast(t('split.eachDone', { n: parts.length }), 'ok'); }
       return;
     }
     let indices;
@@ -156,29 +166,29 @@ function renderSplit() {
     catch (e) { return toast(e.message, 'err'); }
 
     if (mode === 'extract') {
-      const bytes = await withBusy('Extracting…', () => extractPages(file, indices));
-      if (bytes) { downloadBlob(bytes, 'extracted.pdf'); toast('Extracted PDF downloaded.', 'ok'); }
+      const bytes = await withBusy(t('split.extractBusy'), () => extractPages(file, indices));
+      if (bytes) { downloadBlob(bytes, 'extracted.pdf'); toast(t('split.extractDone'), 'ok'); }
     } else {
       // one file per comma-separated range
       const ranges = rangeInput.value.split(',').map((s) => s.trim()).filter(Boolean).map((part) => ({
         name: `${file.name.replace(/\.pdf$/i, '')}-${part.replace(/\s/g, '')}.pdf`,
         indices: parsePageRanges(part, count),
       }));
-      const parts = await withBusy('Splitting…', () => splitRanges(file, ranges));
-      if (parts) { await zipDownload(parts, 'split.zip'); toast(`Created ${parts.length} files.`, 'ok'); }
+      const parts = await withBusy(t('split.busy'), () => splitRanges(file, ranges));
+      if (parts) { await zipDownload(parts, 'split.zip'); toast(t('split.splitDone', { n: parts.length }), 'ok'); }
     }
-  } }, 'Run');
+  } }, t('common.run'));
 
   view().append(
-    pageHead('Split & Extract', 'Extract page ranges or split a PDF into multiple files.'),
+    pageHead('tool.split.title', 'split.subtitle'),
     el('div', { class: 'card' }, [dz, info]),
     el('div', { class: 'card' }, [
-      el('h2', {}, 'What to do'),
+      el('h2', {}, t('split.whatHeading')),
       modeRow,
       el('div', { class: 'field', style: 'margin-top:14px' }, [
-        el('label', { for: 'split-range' }, 'Page ranges'),
+        el('label', { for: 'split-range' }, t('split.rangesLabel')),
         rangeInput,
-        el('div', { class: 'hint' }, 'Pages start at 1. Ignored when “Split every page” is selected.'),
+        el('div', { class: 'hint' }, t('split.rangesHint')),
       ]),
     ]),
     el('div', { class: 'btn-row' }, [go]),
@@ -189,32 +199,63 @@ function renderSplit() {
 function renderOrganize() {
   clear();
   let file = null;
-  let pages = []; // {index, rotate, removed}
   const grid = el('div', { class: 'thumb-grid', id: 'org-grid' });
   const gridCard = el('div', { class: 'card', style: 'display:none', id: 'org-card' }, [
-    el('h2', {}, 'Pages — drag to reorder, rotate or delete'),
+    el('h2', {}, t('organize.heading')),
     grid,
   ]);
+
+  // Keep each thumb's position <input> in sync with its DOM order.
+  const renumber = () => {
+    const thumbs = [...grid.querySelectorAll('.thumb')];
+    thumbs.forEach((c, i) => {
+      const inp = c.querySelector('.pos-input');
+      if (inp) { inp.value = String(i + 1); inp.max = String(thumbs.length); }
+    });
+  };
+  // Move a thumb so it becomes the `pos1`-th (1-based) among all thumbs.
+  const moveThumbTo = (cell, pos1) => {
+    const thumbs = [...grid.querySelectorAll('.thumb')];
+    const others = thumbs.filter((c) => c !== cell);
+    const target = Math.max(0, Math.min(others.length, pos1 - 1));
+    grid.insertBefore(cell, others[target] || null);
+    renumber();
+  };
+  const moveThumbBy = (cell, delta) => {
+    const thumbs = [...grid.querySelectorAll('.thumb')];
+    moveThumbTo(cell, thumbs.indexOf(cell) + 1 + delta);
+  };
 
   const buildThumbs = async (f) => {
     const pdf = await openWithPdfjs(f);
     grid.replaceChildren();
-    pages = [];
     for (let n = 1; n <= pdf.numPages; n++) {
       const canvas = await renderThumb(pdf, n, 150);
-      const idx = n - 1;
-      const state = { index: idx, rotate: 0, removed: false };
-      pages.push(state);
-      const cell = el('div', { class: 'thumb', draggable: 'true', dataset: { idx } }, [
+      const state = { index: n - 1, rotate: 0, removed: false };
+      const posInput = el('input', {
+        type: 'number', class: 'pos-input', min: '1', max: String(pdf.numPages), value: String(n),
+        'aria-label': t('organize.posLabel'), title: t('organize.posLabel'),
+      });
+      const cell = el('div', { class: 'thumb', draggable: 'true' }, [
         canvas,
-        el('span', { class: 'pno' }, `Page ${n}`),
+        el('span', { class: 'pno' }, t('organize.page', { n })),
         el('div', { class: 'thumb-actions' }, [
-          el('button', { title: 'Rotate left',  onClick: () => rotate(state, canvas, -90) }, '⟲'),
-          el('button', { title: 'Rotate right', onClick: () => rotate(state, canvas, 90) }, '⟳'),
-          el('button', { title: 'Delete / restore', onClick: () => toggleRemove(state, cell) }, '🗑'),
+          posInput,
+          ...moveButtons({
+            upLabel: t('move.up'), downLabel: t('move.down'),
+            onUp: () => moveThumbBy(cell, -1), onDown: () => moveThumbBy(cell, 1),
+          }),
+          el('button', { type: 'button', title: t('organize.rotateLeft'), 'aria-label': t('organize.rotateLeft'), onClick: () => rotate(state, canvas, -90) }, '⟲'),
+          el('button', { type: 'button', title: t('organize.rotateRight'), 'aria-label': t('organize.rotateRight'), onClick: () => rotate(state, canvas, 90) }, '⟳'),
+          el('button', { type: 'button', title: t('organize.delete'), 'aria-label': t('organize.delete'), onClick: () => toggleRemove(state, cell) }, '🗑'),
         ]),
       ]);
       cell._state = state;
+      posInput.addEventListener('change', () => {
+        const v = parseInt(posInput.value, 10);
+        if (Number.isNaN(v)) { renumber(); return; }
+        moveThumbTo(cell, v);
+      });
       grid.append(cell);
     }
     await pdf.destroy();
@@ -230,7 +271,7 @@ function renderOrganize() {
     cell.classList.toggle('removed', state.removed);
   };
 
-  makeSortable(grid, '.thumb');
+  makeSortable(grid, '.thumb', renumber);
 
   const currentOrder = () =>
     [...grid.querySelectorAll('.thumb')]
@@ -240,20 +281,20 @@ function renderOrganize() {
 
   const dz = dropzone({
     accept: PDF_ACCEPT, multiple: false, icon: '🗂️',
-    label: 'Drop a PDF here or click to browse',
-    onFiles: async ([f]) => { file = f; await withBusy('Rendering pages…', () => buildThumbs(f)); },
+    label: t('common.dropPdf'),
+    onFiles: async ([f]) => { file = f; await withBusy(t('organize.rendering'), () => buildThumbs(f)); },
   });
 
   const go = el('button', { class: 'btn btn-primary', onClick: async () => {
-    if (!file) return toast('Load a PDF first.', 'err');
+    if (!file) return toast(t('common.loadFirst'), 'err');
     const order = currentOrder();
-    if (order.length === 0) return toast('All pages are deleted — keep at least one.', 'err');
-    const bytes = await withBusy('Building PDF…', () => rebuildPages(file, order));
-    if (bytes) { downloadBlob(bytes, 'organized.pdf'); toast('Organized PDF downloaded.', 'ok'); }
-  } }, 'Save & download');
+    if (order.length === 0) return toast(t('organize.allDeleted'), 'err');
+    const bytes = await withBusy(t('organize.building'), () => rebuildPages(file, order));
+    if (bytes) { downloadBlob(bytes, 'organized.pdf'); toast(t('organize.done'), 'ok'); }
+  } }, t('organize.action'));
 
   view().append(
-    pageHead('Organize Pages', 'Reorder, rotate and remove pages, then export.'),
+    pageHead('tool.organize.title', 'organize.subtitle'),
     el('div', { class: 'card' }, [dz]),
     gridCard,
     el('div', { class: 'btn-row' }, [go]),
@@ -265,17 +306,26 @@ function renderImages() {
   clear();
   let files = [];
   const list = el('ul', { class: 'file-list', id: 'img-list' });
-  const listCard = el('div', { class: 'card' }, [el('h2', {}, 'Images'), el('div', { class: 'empty', id: 'img-empty' }, 'No images yet.'), list]);
+  const listCard = el('div', { class: 'card' }, [
+    el('h2', {}, t('images.heading')),
+    el('div', { class: 'empty', id: 'img-empty' }, t('images.empty')),
+    list,
+  ]);
 
   const refresh = () => {
     list.replaceChildren();
     document.getElementById('img-empty').style.display = files.length ? 'none' : '';
     files.forEach((f, i) => {
       list.append(el('li', { class: 'file-item', draggable: 'true', dataset: { i } }, [
-        el('span', { class: 'grip' }, '⠿'),
+        el('span', { class: 'grip', title: t('reorder.grip') }, '⠿'),
         el('span', { class: 'fname' }, f.name),
         el('span', { class: 'fmeta' }, fmtBytes(f.size)),
-        el('button', { class: 'btn btn-danger', onClick: () => { files.splice(i, 1); refresh(); } }, '✕'),
+        ...moveButtons({
+          upLabel: t('move.up'), downLabel: t('move.down'),
+          onUp: () => { moveItem(files, i, -1); refresh(); },
+          onDown: () => { moveItem(files, i, 1); refresh(); },
+        }),
+        el('button', { class: 'btn btn-danger', title: t('item.remove'), 'aria-label': t('item.remove'), onClick: () => { files.splice(i, 1); refresh(); } }, '✕'),
       ]));
     });
   };
@@ -286,47 +336,46 @@ function renderImages() {
   });
 
   const sizeSel = el('select', { id: 'img-size' }, [
-    el('option', { value: 'fit' }, 'Fit page to image'),
+    el('option', { value: 'fit' }, t('images.size.fit')),
     el('option', { value: 'A4' }, 'A4'),
     el('option', { value: 'Letter' }, 'Letter'),
     el('option', { value: 'Legal' }, 'Legal'),
   ]);
   const orientSel = el('select', { id: 'img-orient' }, [
-    el('option', { value: 'auto' }, 'Auto'),
-    el('option', { value: 'portrait' }, 'Portrait'),
-    el('option', { value: 'landscape' }, 'Landscape'),
+    el('option', { value: 'auto' }, t('images.orient.auto')),
+    el('option', { value: 'portrait' }, t('images.orient.portrait')),
+    el('option', { value: 'landscape' }, t('images.orient.landscape')),
   ]);
   const marginInput = el('input', { type: 'number', value: '0', min: '0', step: '4', id: 'img-margin' });
 
   const dz = dropzone({
     accept: IMG_ACCEPT, multiple: true, icon: '🖼️',
-    label: 'Drop images here or click to browse',
-    hint: 'JPG or PNG',
+    label: t('common.dropImages'), hint: t('images.hint'),
     onFiles: (picked) => { files.push(...picked.filter((f) => /image\/(png|jpe?g)/i.test(f.type) || /\.(png|jpe?g)$/i.test(f.name))); refresh(); },
   });
 
   const go = el('button', { class: 'btn btn-primary', onClick: async () => {
-    if (files.length === 0) return toast('Add at least one image.', 'err');
-    const bytes = await withBusy('Building PDF…', () => imagesToPdf(files, {
+    if (files.length === 0) return toast(t('images.needOne'), 'err');
+    const bytes = await withBusy(t('images.busy'), () => imagesToPdf(files, {
       pageSize: sizeSel.value,
       orientation: orientSel.value,
       margin: Number(marginInput.value) || 0,
     }));
-    if (bytes) { downloadBlob(bytes, 'images.pdf'); toast('PDF downloaded.', 'ok'); }
-  } }, 'Create PDF');
+    if (bytes) { downloadBlob(bytes, 'images.pdf'); toast(t('images.done'), 'ok'); }
+  } }, t('images.action'));
 
   view().append(
-    pageHead('Images → PDF', 'Combine JPG/PNG images into a PDF, one image per page.'),
+    pageHead('tool.images.title', 'images.subtitle'),
     el('div', { class: 'card' }, [dz]),
     listCard,
     el('div', { class: 'card' }, [
-      el('h2', {}, 'Page options'),
+      el('h2', {}, t('images.optionsHeading')),
       el('div', { class: 'controls' }, [
-        el('div', { class: 'field' }, [el('label', { for: 'img-size' }, 'Page size'), sizeSel]),
-        el('div', { class: 'field' }, [el('label', { for: 'img-orient' }, 'Orientation'), orientSel]),
-        el('div', { class: 'field' }, [el('label', { for: 'img-margin' }, 'Margin (pt)'), marginInput]),
+        el('div', { class: 'field' }, [el('label', { for: 'img-size' }, t('images.size')), sizeSel]),
+        el('div', { class: 'field' }, [el('label', { for: 'img-orient' }, t('images.orient')), orientSel]),
+        el('div', { class: 'field' }, [el('label', { for: 'img-margin' }, t('images.margin')), marginInput]),
       ]),
-      el('div', { class: 'hint' }, 'Orientation & margin apply only to fixed page sizes (not “Fit page to image”).'),
+      el('div', { class: 'hint' }, t('images.optHint')),
     ]),
     el('div', { class: 'btn-row' }, [go]),
   );
@@ -337,11 +386,11 @@ function renderImages() {
 function renderToPng() {
   clear();
   let file = null;
-  const info = el('div', { class: 'empty', id: 'png-info' }, 'No PDF loaded yet.');
+  const info = el('div', { class: 'empty', id: 'png-info' }, t('common.noPdf'));
 
   const fmtSel = el('select', { id: 'png-fmt' }, [
-    el('option', { value: 'image/png' }, 'PNG (lossless)'),
-    el('option', { value: 'image/jpeg' }, 'JPG (smaller)'),
+    el('option', { value: 'image/png' }, t('topng.format.png')),
+    el('option', { value: 'image/jpeg' }, t('topng.format.jpg')),
   ]);
   const scaleSel = el('select', { id: 'png-scale' }, [
     el('option', { value: '1' }, '1× (72 dpi)'),
@@ -352,18 +401,18 @@ function renderToPng() {
 
   const dz = dropzone({
     accept: PDF_ACCEPT, multiple: false, icon: '📸',
-    label: 'Drop a PDF here or click to browse',
+    label: t('common.dropPdf'),
     onFiles: async ([f]) => {
       file = f;
-      const c = await withBusy('Reading…', () => pageCount(f));
+      const c = await withBusy(t('split.reading'), () => pageCount(f));
       info.className = 'hint';
-      info.textContent = `${f.name} — ${c} page${c === 1 ? '' : 's'}.`;
+      info.textContent = t('common.fileInfo', { name: f.name, n: c });
     },
   });
 
   const go = el('button', { class: 'btn btn-primary', onClick: async () => {
-    if (!file) return toast('Load a PDF first.', 'err');
-    const images = await withBusy('Rendering pages…', () => pdfToImages(file, {
+    if (!file) return toast(t('common.loadFirst'), 'err');
+    const images = await withBusy(t('topng.busy'), () => pdfToImages(file, {
       scale: Number(scaleSel.value),
       type: fmtSel.value,
       baseName: file.name.replace(/\.pdf$/i, ''),
@@ -371,19 +420,19 @@ function renderToPng() {
     if (!images) return;
     if (images.length === 1) downloadBlob(images[0].blob, images[0].name, fmtSel.value);
     else await zipDownload(images, 'images.zip');
-    toast(`Exported ${images.length} image${images.length === 1 ? '' : 's'}.`, 'ok');
-  } }, 'Export images');
+    toast(t('topng.done', { n: images.length }), 'ok');
+  } }, t('topng.action'));
 
   view().append(
-    pageHead('PDF → Images', 'Render each page of a PDF to a PNG or JPG.'),
+    pageHead('tool.topng.title', 'topng.subtitle'),
     el('div', { class: 'card' }, [dz, info]),
     el('div', { class: 'card' }, [
-      el('h2', {}, 'Output'),
+      el('h2', {}, t('topng.outputHeading')),
       el('div', { class: 'controls' }, [
-        el('div', { class: 'field' }, [el('label', { for: 'png-fmt' }, 'Format'), fmtSel]),
-        el('div', { class: 'field' }, [el('label', { for: 'png-scale' }, 'Resolution'), scaleSel]),
+        el('div', { class: 'field' }, [el('label', { for: 'png-fmt' }, t('topng.format')), fmtSel]),
+        el('div', { class: 'field' }, [el('label', { for: 'png-scale' }, t('topng.res')), scaleSel]),
       ]),
-      el('div', { class: 'hint' }, 'Multiple pages are bundled into a ZIP.'),
+      el('div', { class: 'hint' }, t('topng.zipHint')),
     ]),
     el('div', { class: 'btn-row' }, [go]),
   );
@@ -393,26 +442,26 @@ function renderToPng() {
 function renderResize() {
   clear();
   let file = null;
-  const info = el('div', { class: 'empty', id: 'rs-info' }, 'No PDF loaded yet.');
+  const info = el('div', { class: 'empty', id: 'rs-info' }, t('common.noPdf'));
 
   const modeRow = el('div', { class: 'radio-row' }, [
-    el('label', {}, [el('input', { type: 'radio', name: 'rmode', value: 'preset', checked: true }), 'Fit to a standard size']),
-    el('label', {}, [el('input', { type: 'radio', name: 'rmode', value: 'scale' }), 'Scale by a factor']),
+    el('label', {}, [el('input', { type: 'radio', name: 'rmode', value: 'preset', checked: true }), t('resize.mode.preset')]),
+    el('label', {}, [el('input', { type: 'radio', name: 'rmode', value: 'scale' }), t('resize.mode.scale')]),
   ]);
   const presetSel = el('select', { id: 'rs-preset' }, Object.keys(PAGE_SIZES).map((k) => el('option', { value: k }, k)));
   const orientSel = el('select', { id: 'rs-orient' }, [
-    el('option', { value: 'portrait' }, 'Portrait'),
-    el('option', { value: 'landscape' }, 'Landscape'),
-    el('option', { value: 'auto' }, 'Match page'),
+    el('option', { value: 'portrait' }, t('resize.orient.portrait')),
+    el('option', { value: 'landscape' }, t('resize.orient.landscape')),
+    el('option', { value: 'auto' }, t('resize.orient.auto')),
   ]);
   const scaleInput = el('input', { type: 'number', value: '0.5', min: '0.05', step: '0.05', id: 'rs-scale' });
 
   const presetFields = el('div', { class: 'controls', id: 'rs-preset-fields' }, [
-    el('div', { class: 'field' }, [el('label', { for: 'rs-preset' }, 'Target size'), presetSel]),
-    el('div', { class: 'field' }, [el('label', { for: 'rs-orient' }, 'Orientation'), orientSel]),
+    el('div', { class: 'field' }, [el('label', { for: 'rs-preset' }, t('resize.target')), presetSel]),
+    el('div', { class: 'field' }, [el('label', { for: 'rs-orient' }, t('resize.orient')), orientSel]),
   ]);
   const scaleFields = el('div', { class: 'controls', id: 'rs-scale-fields', style: 'display:none' }, [
-    el('div', { class: 'field' }, [el('label', { for: 'rs-scale' }, 'Scale factor'), scaleInput, el('div', { class: 'hint' }, '0.5 = half size, 2 = double size')]),
+    el('div', { class: 'field' }, [el('label', { for: 'rs-scale' }, t('resize.factor')), scaleInput, el('div', { class: 'hint' }, t('resize.factorHint'))]),
   ]);
 
   modeRow.addEventListener('change', () => {
@@ -423,30 +472,84 @@ function renderResize() {
 
   const dz = dropzone({
     accept: PDF_ACCEPT, multiple: false, icon: '📐',
-    label: 'Drop a PDF here or click to browse',
+    label: t('common.dropPdf'),
     onFiles: async ([f]) => {
       file = f;
-      const c = await withBusy('Reading…', () => pageCount(f));
+      const c = await withBusy(t('split.reading'), () => pageCount(f));
       info.className = 'hint';
-      info.textContent = `${f.name} — ${c} page${c === 1 ? '' : 's'}.`;
+      info.textContent = t('common.fileInfo', { name: f.name, n: c });
     },
   });
 
   const go = el('button', { class: 'btn btn-primary', onClick: async () => {
-    if (!file) return toast('Load a PDF first.', 'err');
+    if (!file) return toast(t('common.loadFirst'), 'err');
     const mode = modeRow.querySelector('input:checked').value;
     const opts = mode === 'scale'
       ? { mode: 'scale', scale: Number(scaleInput.value) }
       : { mode: 'preset', preset: presetSel.value, orientation: orientSel.value };
-    const bytes = await withBusy('Resizing…', () => resizePages(file, opts));
-    if (bytes) { downloadBlob(bytes, 'resized.pdf'); toast('Resized PDF downloaded.', 'ok'); }
-  } }, 'Resize & download');
+    const bytes = await withBusy(t('resize.busy'), () => resizePages(file, opts));
+    if (bytes) { downloadBlob(bytes, 'resized.pdf'); toast(t('resize.done'), 'ok'); }
+  } }, t('resize.action'));
 
   view().append(
-    pageHead('Resize Pages', 'Scale pages or fit them to a standard paper size.'),
+    pageHead('tool.resize.title', 'resize.subtitle'),
     el('div', { class: 'card' }, [dz, info]),
-    el('div', { class: 'card' }, [el('h2', {}, 'How to resize'), modeRow, el('div', { style: 'margin-top:14px' }, [presetFields, scaleFields])]),
+    el('div', { class: 'card' }, [el('h2', {}, t('resize.howHeading')), modeRow, el('div', { style: 'margin-top:14px' }, [presetFields, scaleFields])]),
     el('div', { class: 'btn-row' }, [go]),
+  );
+}
+
+/* --------------------------- Compress --------------------------- */
+function renderCompress() {
+  clear();
+  let file = null;
+  const info = el('div', { class: 'empty', id: 'cmp-info' }, t('common.noPdf'));
+  const resultBox = el('div', { id: 'cmp-result' });
+
+  const levelRow = el('div', { class: 'radio-row' }, [
+    el('label', {}, [el('input', { type: 'radio', name: 'clevel', value: 'low' }), t('compress.level.low')]),
+    el('label', {}, [el('input', { type: 'radio', name: 'clevel', value: 'medium', checked: true }), t('compress.level.medium')]),
+    el('label', {}, [el('input', { type: 'radio', name: 'clevel', value: 'high' }), t('compress.level.high')]),
+  ]);
+
+  const dz = dropzone({
+    accept: PDF_ACCEPT, multiple: false, icon: '🗜️',
+    label: t('common.dropPdf'),
+    onFiles: async ([f]) => {
+      file = f;
+      const c = await withBusy(t('split.reading'), () => pageCount(f));
+      info.className = 'hint';
+      info.textContent = t('common.fileInfo', { name: f.name, n: c });
+      resultBox.replaceChildren();
+    },
+  });
+
+  const go = el('button', { class: 'btn btn-primary', onClick: async () => {
+    if (!file) return toast(t('common.loadFirst'), 'err');
+    const level = levelRow.querySelector('input:checked').value;
+    const before = file.size;
+    const bytes = await withBusy(t('compress.busy'), () => compressPdf(file, { level }));
+    if (!bytes) return;
+    const after = bytes.length;
+    const pct = Math.round((1 - after / before) * 100);
+    downloadBlob(bytes, 'compressed.pdf');
+    resultBox.replaceChildren(el('div', { class: 'result' }, [
+      el('span', { class: 'ok-ico' }, pct > 0 ? '✓' : 'ℹ️'),
+      el('span', {}, t('compress.result', { before: fmtBytes(before), after: fmtBytes(after), pct })),
+    ]));
+    toast(pct > 0 ? t('compress.done') : t('compress.larger'), pct > 0 ? 'ok' : 'info', pct > 0 ? 4000 : 6000);
+  } }, t('compress.action'));
+
+  view().append(
+    pageHead('tool.compress.title', 'compress.subtitle'),
+    el('div', { class: 'card' }, [dz, info]),
+    el('div', { class: 'card' }, [
+      el('h2', {}, t('compress.levelHeading')),
+      levelRow,
+      el('div', { class: 'hint', style: 'margin-top:12px' }, t('compress.note')),
+    ]),
+    el('div', { class: 'btn-row' }, [go]),
+    resultBox,
   );
 }
 
@@ -459,6 +562,7 @@ const ROUTES = {
   'images': renderImages,
   'topng': renderToPng,
   'resize': renderResize,
+  'compress': renderCompress,
 };
 
 function route() {
@@ -468,7 +572,17 @@ function route() {
   window.scrollTo(0, 0);
 }
 
+let booted = false;
+function boot() {
+  if (booted) return;
+  booted = true;
+  applyDocumentChrome();
+  const toggle = document.getElementById('lang-toggle');
+  if (toggle) toggle.addEventListener('click', () => { setLang(otherLang()); route(); });
+  route();
+}
+
 window.addEventListener('hashchange', route);
-window.addEventListener('DOMContentLoaded', route);
+window.addEventListener('DOMContentLoaded', boot);
 // In case the module loads after DOMContentLoaded already fired:
-if (document.readyState !== 'loading') route();
+if (document.readyState !== 'loading') boot();

@@ -89,7 +89,7 @@ export function dropzone({ accept = '', multiple = true, label = 'Drop files her
     'aria-label': label,
   }, [
     el('span', { class: 'dz-ico' }, icon),
-    el('strong', {}, label.split(' or ')[0]),
+    el('strong', {}, label),
     hint ? el('small', {}, hint) : null,
     input,
   ]);
@@ -142,6 +142,28 @@ export function parsePageRanges(input, total = Infinity) {
   }
   if (out.length === 0) throw new Error('No pages matched (are they within the document?).');
   return out;
+}
+
+/** Move an array element from index `i` by `delta` (in place). Returns the array. */
+export function moveItem(arr, i, delta) {
+  const j = i + delta;
+  if (j < 0 || j >= arr.length) return arr;
+  const [item] = arr.splice(i, 1);
+  arr.splice(j, 0, item);
+  return arr;
+}
+
+/**
+ * Build ▲/▼ move buttons for an item. Touch-friendly + accessible alternative
+ * to drag-to-reorder.
+ * @param {object} o { upLabel, downLabel, onUp, onDown }
+ * @returns {HTMLElement[]} two buttons
+ */
+export function moveButtons({ upLabel = 'Move up', downLabel = 'Move down', onUp, onDown }) {
+  return [
+    el('button', { class: 'btn btn-move', type: 'button', title: upLabel, 'aria-label': upLabel, onClick: onUp }, '▲'),
+    el('button', { class: 'btn btn-move', type: 'button', title: downLabel, 'aria-label': downLabel, onClick: onDown }, '▼'),
+  ];
 }
 
 /** Enable simple drag-to-reorder on a list container's direct children. */

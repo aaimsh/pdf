@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ar" dir="rtl">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -14,14 +14,15 @@
       <span class="brand-mark">📄</span>
       <span class="brand-name">PDF&nbsp;Toolkit</span>
     </a>
-    <span class="brand-tag">100% in your browser · nothing uploaded</span>
+    <span class="brand-tag" data-i18n="brand.tag">100% in your browser · nothing uploaded</span>
+    <button id="lang-toggle" class="lang-toggle" type="button">العربية</button>
   </header>
 
   <main id="view" class="view" aria-live="polite"><!-- rendered by app.js --></main>
 
   <footer class="site-footer">
-    <span>Runs entirely client-side with <a href="https://pdf-lib.js.org" target="_blank" rel="noopener">pdf-lib</a> &amp; <a href="https://mozilla.github.io/pdf.js/" target="_blank" rel="noopener">pdf.js</a>.</span>
-    <span>Your files stay on your device.</span>
+    <span data-i18n="footer.tech">Runs entirely client-side with pdf-lib &amp; pdf.js.</span>
+    <span data-i18n="footer.privacy">Your files stay on your device.</span>
   </footer>
 
   <div id="toast-host" class="toast-host" aria-live="assertive"></div>

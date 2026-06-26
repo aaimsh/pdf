@@ -30,11 +30,12 @@ body {
     radial-gradient(1200px 600px at 80% -10%, rgba(99, 102, 241, 0.10), transparent 60%),
     var(--bg);
   color: var(--text);
-  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, Tahoma, Arial, "Noto Sans Arabic", "Noto Naskh Arabic", sans-serif;
   display: flex;
   flex-direction: column;
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
 
 a { color: var(--accent-hover); text-decoration: none; }
@@ -57,7 +58,22 @@ a:hover { text-decoration: underline; }
 .brand { display: flex; align-items: center; gap: 10px; color: var(--text); font-weight: 700; font-size: 18px; }
 .brand:hover { text-decoration: none; }
 .brand-mark { font-size: 22px; }
-.brand-tag { color: var(--text-faint); font-size: 13px; margin-left: auto; }
+.brand-tag { color: var(--text-faint); font-size: 13px; margin-inline-start: auto; }
+
+.lang-toggle {
+  margin-inline-start: 4px;
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.12s, background 0.12s;
+}
+.lang-toggle:hover { border-color: var(--accent); background: var(--surface-2); }
 
 .site-footer {
   margin-top: auto;
@@ -92,6 +108,8 @@ a:hover { text-decoration: underline; }
   font-size: 14px;
   margin-bottom: 18px;
 }
+.back-link .arrow { display: inline-block; }
+[dir="rtl"] .back-link .arrow { transform: scaleX(-1); }
 
 /* ---------- Home grid ---------- */
 .hero { margin-bottom: 28px; }
@@ -199,18 +217,29 @@ a:hover { text-decoration: underline; }
 .thumb.removed { opacity: 0.3; filter: grayscale(1); }
 .thumb canvas { max-width: 100%; height: auto; border-radius: 4px; background: #fff; transition: transform 0.18s; }
 .thumb .pno { font-size: 12px; color: var(--text-faint); }
-.thumb .thumb-actions { display: flex; gap: 6px; }
+.thumb .thumb-actions { display: flex; flex-wrap: wrap; gap: 5px; justify-content: center; }
 .thumb .thumb-actions button {
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text-dim);
   border-radius: 6px;
-  width: 28px; height: 26px;
+  width: 30px; height: 28px;
   cursor: pointer;
   font-size: 13px;
   line-height: 1;
+  padding: 0;
 }
 .thumb .thumb-actions button:hover { color: var(--text); border-color: var(--accent); }
+.thumb .pos-input {
+  width: 46px;
+  min-width: 0;
+  padding: 5px 6px;
+  text-align: center;
+  font-size: 13px;
+  border-radius: 6px;
+}
+.btn-move { padding: 11px 12px; font-size: 11px; line-height: 1; }
+.file-item .btn { min-width: 38px; }
 
 /* ---------- Controls ---------- */
 .controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end; }
@@ -327,3 +356,34 @@ input:focus, select:focus { outline: none; border-color: var(--accent); box-shad
 
 .empty { color: var(--text-faint); font-size: 14px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); border: 0; }
+
+/* ---------- Mobile ---------- */
+@media (max-width: 640px) {
+  .site-header { gap: 10px; padding: 12px 16px; }
+  .brand-tag { display: none; }
+  .lang-toggle { margin-inline-start: auto; }
+
+  .view { padding: 18px 14px; }
+  .card { padding: 16px; }
+  .hero h1 { font-size: 24px; }
+
+  /* Inputs and selects fill the row instead of overflowing it. */
+  input[type="text"], input[type="number"], select { min-width: 0; width: 100%; }
+  .controls { gap: 12px; }
+  .field { flex: 1 1 100%; }
+
+  /* Full-width primary actions are easier to tap. */
+  .btn-row { flex-direction: column; }
+  .btn-row .btn { width: 100%; }
+
+  .tool-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+  .thumb-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 10px; }
+
+  .dropzone { padding: 28px 14px; }
+
+  /* Larger tap targets. */
+  .thumb .thumb-actions button { width: 34px; height: 32px; }
+  .thumb .pos-input { width: 100%; height: 32px; }
+  .file-item .btn { min-width: 44px; min-height: 40px; }
+  .btn-move { min-width: 40px; min-height: 40px; }
+}

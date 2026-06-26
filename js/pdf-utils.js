@@ -188,6 +188,49 @@ export async function pdfToImages(file, opts = {}) {
   return results;
 }
 
+// Compression levels: a target render scale (1 = 72dpi) and JPEG quality.
+export const COMPRESS_LEVELS = {
+  low:    { scale: 2.0, quality: 0.75 }, // light compression, higher quality
+  medium: { scale: 1.5, quality: 0.6 },  // balanced
+  high:   { scale: 1.0, quality: 0.5 },  // strongest compression, smallest file
+};
+
+/**
+ * Compress a PDF by rasterizing each page (pdf.js) and re-encoding it as JPEG
+ * (pdf-lib). Most effective for scanned / image-heavy PDFs. Note: pages become
+ * images, so selectable text is lost — this is the standard client-side method.
+ * @param {object} opts  { level: 'low'|'medium'|'high' }
+ * @returns {Promise<Uint8Array>}
+ */
+export async function compressPdf(file, opts = {}) {
+  const { scale, quality } = COMPRESS_LEVELS[opts.level] || COMPRESS_LEVELS.medium;
+  const data = new Uint8Array(await toBytes(file));
+  const src = await pdfjsLib.getDocument({ data }).promise;
+  const out = await PDFDocument.create();
+  try {
+    for (let n = 1; n <= src.numPages; n++) {
+      const page = await src.getPage(n);
+      const ptViewport = page.getViewport({ scale: 1 });   // page size in PDF points
+      const viewport = page.getViewport({ scale });        // raster resolution
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.max(1, Math.floor(viewport.width));
+      canvas.height = Math.max(1, Math.floor(viewport.height));
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      const blob = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', quality));
+      const jpg = await out.embedJpg(new Uint8Array(await blob.arrayBuffer()));
+      const outPage = out.addPage([ptViewport.width, ptViewport.height]);
+      outPage.drawImage(jpg, { x: 0, y: 0, width: ptViewport.width, height: ptViewport.height });
+      page.cleanup();
+    }
+  } finally {
+    await src.destroy();
+  }
+  return out.save();
+}
+
 /**
  * Resize/scale every page.
  * @param {object} opts  { mode:'preset'|'scale', preset:'A4'..., orientation, scale:number }
